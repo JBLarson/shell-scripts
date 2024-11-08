@@ -5,8 +5,11 @@ echo """ _          _
 | '_ \ / __| '_ \ 
 | |_) |\__ \ | | |
 |_.__(_)___/_| |_|\n"""
-echo && echo """Homebrew Update / Upgrade / Cleanup / Doctor\n"""
+
+echo && echo """Homebrew Update / Upgrade / Cleanup & Neofetch\n"""
 
 
-brew update && echo && brew upgrade && echo brew cleanup && echo && brew doctor
-echo
+echo "brew update" && brew update && echo
+echo "brew upgrade" && brew upgrade && echo
+echo "brew cleanup" && brew cleanup && echo
+neofetch
