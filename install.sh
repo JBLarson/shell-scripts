@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Install shell scripts by symlinking common and platform-specific scripts to ~/bin
 
 # detect OS
 case "$(uname)" in

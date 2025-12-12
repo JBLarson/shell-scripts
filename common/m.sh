@@ -1,4 +1,5 @@
 #!/bin/sh
+# Toggle Mullvad VPN with lockdown mode cycling for secure reconnection
 
 mullvad lockdown-mode set off && mullvad lockdown-mode get
 mullvad disconnect && mullvad status -v

@@ -1,4 +1,5 @@
 #!/bin/sh
+# Update, upgrade, and cleanup Homebrew packages then display system info
 
 echo """ _          _     
 | |__   ___| |__  

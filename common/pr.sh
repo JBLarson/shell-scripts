@@ -1,4 +1,5 @@
 #!/bin/sh
+# Health check ping for QuizPro production server with timestamps
 
 echo
 echo "render status for quizpro-production server"

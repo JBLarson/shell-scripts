@@ -1,4 +1,5 @@
 #!/bin/sh
+# Display dependency count for each top-level Homebrew package
 
 echo && echo "Brew Leaves Dependency Count" && echo
 

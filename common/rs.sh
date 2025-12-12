@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# save as repo-stats.sh, chmod +x repo-stats.sh
+# Calculate total lines added/deleted and files changed across entire git history
+
 added=0
 deleted=0
 files=0

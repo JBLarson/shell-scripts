@@ -1,4 +1,5 @@
 #!/bin/sh
+# Whois domain lookup with formatted output for key registration details
 
 if [ "$#" -ne 1 ]; then
     echo "Usage: $0 <domain>"
@@ -26,5 +27,3 @@ echo "Name Servers:"
 echo "$NAME_SERVERS" | while read -r line; do
     echo "  - $line"
 done
-
-exit 0

@@ -1,4 +1,5 @@
-#!/bin/sh
+#!/usr/bin/sh
+# Clear Linux page cache, dentries, and inodes to free RAM
 
 free -h
 
