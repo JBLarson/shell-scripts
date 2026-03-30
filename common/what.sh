@@ -146,7 +146,7 @@ print_banner() {
 
   # Title line
   local title=" ◈  SQLite Inspector"
-  local version="v1.0.0 "
+  local version="v1.1.0 "
   printf "${BG_BLACK}${BOLD}${BRIGHT_CYAN}%-*s${BRIGHT_BLACK}%s${RESET}\n" \
     "$((w - ${#version}))" "$title" "$version"
 
@@ -248,6 +248,140 @@ type_color() {
   esac
 }
 
+# ── Fill-rate ASCII bar ───────────────────────────────────────────────────────
+# fill_bar <pct_integer_0_100> <bar_width>
+# Renders a proportional bar with color gradient:
+#   0–49  → red    50–79 → yellow    80–99 → cyan    100 → green
+fill_bar() {
+  local pct="$1"
+  local width="${2:-20}"
+
+  local filled
+  filled=$(awk "BEGIN{printf \"%d\", ($pct * $width) / 100}")
+  local empty=$(( width - filled ))
+
+  # Color by fill level
+  local bar_color
+  if   [[ $pct -eq 100 ]];  then bar_color="$BRIGHT_GREEN"
+  elif [[ $pct -ge 80  ]];  then bar_color="$BRIGHT_CYAN"
+  elif [[ $pct -ge 50  ]];  then bar_color="$BRIGHT_YELLOW"
+  else                            bar_color="$BRIGHT_RED"
+  fi
+
+  local pct_label
+  pct_label=$(printf "%3d%%" "$pct")
+
+  printf "${bar_color}"
+  [[ $filled -gt 0 ]] && repeat_char "█" "$filled"
+  printf "${BRIGHT_BLACK}"
+  [[ $empty  -gt 0 ]] && repeat_char "░" "$empty"
+  printf "${RESET} ${bar_color}%s${RESET}" "$pct_label"
+}
+
+# ── Table statistics (fill-rate truth table) ──────────────────────────────────
+# One full table scan per table — single SQL projection of all COUNT(col) calls.
+# Complexity: O(rows × cols) time, O(cols) space — one row returned per table.
+print_table_stats() {
+  local db_path="$1"
+  local tbl="$2"
+
+  # Fetch column names
+  local col_data
+  col_data=$(sqlite3 "$db_path" "PRAGMA table_info(\"${tbl}\");" 2>/dev/null)
+  [[ -z "$col_data" ]] && return
+
+  # Build column name array
+  local -a col_names=()
+  while IFS='|' read -r _cid name _type _nn _dflt _pk; do
+    col_names+=("$name")
+  done <<< "$col_data"
+
+  local ncols="${#col_names[@]}"
+  [[ $ncols -eq 0 ]] && return
+
+  # ── Build single-scan SQL ──────────────────────────────────────────────────
+  # SELECT COUNT(*), COUNT("col1"), COUNT("col2"), ... FROM "tbl"
+  # COUNT(*) counts all rows; COUNT(col) skips NULLs — ANSI standard.
+  local select_parts="COUNT(*)"
+  for col in "${col_names[@]}"; do
+    select_parts+=", COUNT(\"${col}\")"
+  done
+
+  local query="SELECT ${select_parts} FROM \"${tbl}\";"
+
+  local result
+  result=$(sqlite3 "$db_path" "$query" 2>/dev/null)
+  [[ -z "$result" ]] && return
+
+  # Parse pipe-delimited result into array
+  IFS='|' read -r -a counts <<< "$result"
+
+  local total_rows="${counts[0]}"
+
+  printf "  ${BOLD}${UNDERLINE}${BRIGHT_WHITE}FILL RATE${RESET}  "
+  printf "${BRIGHT_BLACK}(${total_rows} rows × ${ncols} columns — single scan)${RESET}\n"
+  printf "\n"
+
+  # ── Column header ──────────────────────────────────────────────────────────
+  local BAR_W=24
+  printf "  ${DIM}%-28s  %8s  %8s  %8s  %-${BAR_W}s${RESET}\n" \
+    "COLUMN" "TOTAL" "PRESENT" "NULL" "FILL RATE"
+  printf "  "
+  repeat_char "─" "$(($(term_width) - 4))"
+  printf "\n"
+
+  # ── Per-column rows ────────────────────────────────────────────────────────
+  local i
+  for (( i=0; i<ncols; i++ )); do
+    local col="${col_names[$i]}"
+    local present="${counts[$((i + 1))]}"   # offset by 1 due to COUNT(*)
+    local null_count=$(( total_rows - present ))
+
+    # Fill percentage — guard against zero-row tables
+    local pct=0
+    if [[ $total_rows -gt 0 ]]; then
+      pct=$(awk "BEGIN{printf \"%d\", ($present / $total_rows) * 100}")
+    fi
+
+    # Null count color
+    local null_color
+    [[ $null_count -gt 0 ]] && null_color="$BRIGHT_RED" || null_color="$BRIGHT_BLACK"
+
+    printf "  ${BOLD}${BRIGHT_WHITE}%-28s${RESET}  " "$col"   # column name
+    printf "${BRIGHT_BLACK}%8s${RESET}  " "$total_rows"   # total
+    printf "${BRIGHT_GREEN}%8s${RESET}  " "$present"       # present
+    printf "${null_color}%8s${RESET}  "  "$null_count"     # null count
+    fill_bar "$pct" "$BAR_W"
+    printf "\n"
+  done
+
+  # ── Table-level summary line ───────────────────────────────────────────────
+  printf "\n"
+
+  if [[ $total_rows -gt 0 ]]; then
+    # Total cells and total present across all columns
+    local total_cells=$(( total_rows * ncols ))
+    local total_present=0
+    for (( i=1; i<=ncols; i++ )); do
+      total_present=$(( total_present + counts[i] ))
+    done
+    local total_null=$(( total_cells - total_present ))
+    local overall_pct
+    overall_pct=$(awk "BEGIN{printf \"%d\", ($total_present / $total_cells) * 100}")
+
+    printf "  ${DIM}overall  "
+    printf "${BRIGHT_BLACK}%8s cells  " "$total_cells"
+    printf "${BRIGHT_GREEN}%8s present  " "$total_present"
+    printf "${BRIGHT_RED}%8s null${RESET}  " "$total_null"
+    fill_bar "$overall_pct" "$BAR_W"
+    printf "\n"
+  else
+    printf "  ${DIM}${BRIGHT_BLACK}(empty table — no fill data)${RESET}\n"
+  fi
+
+  printf "\n"
+}
+
 print_table_detail() {
   local db_path="$1"
   local tbl="$2"
@@ -322,6 +456,9 @@ print_table_detail() {
   fi
 
   printf "\n"
+
+  # ── Fill-rate truth table ──────────────────────────────────────────────────
+  print_table_stats "$db_path" "$tbl"
 
   # ── Indices ────────────────────────────────────────────────────────────────
   local index_list
